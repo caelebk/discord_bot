@@ -1,11 +1,15 @@
-const { Events } = require("discord.js");
+import { Events, Interaction } from "discord.js";
+import myClient from "..";
+import { Command } from "../commands/command";
 
-module.exports = {
+export const interactionCreateEvent = {
   name: Events.InteractionCreate,
-  async execute(interaction) {
+  execute(client: myClient, interaction: Interaction) {
     if (!interaction.isChatInputCommand()) return;
 
-    const command = interaction.client.commands.get(interaction.commandName);
+    const command: Command | undefined = client.commands.get(
+      interaction.commandName
+    );
 
     if (!command) {
       console.error(
@@ -15,7 +19,7 @@ module.exports = {
     }
 
     try {
-      await command.execute(interaction);
+      command.execute(client, interaction);
     } catch (error) {
       console.error(`Error executing ${interaction.commandName}`);
       console.error(error);

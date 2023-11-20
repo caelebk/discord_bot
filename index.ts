@@ -1,49 +1,30 @@
-import fs from "node:fs";
-import path from "node:path";
 import { Client, Collection, GatewayIntentBits } from "discord.js";
 import { BOT_TOKEN } from "./config.json";
+import { Command } from "./commands/command";
+import { events } from "./events/eventList";
 
 export default class myClient extends Client {
-  commands: Collection<any, any>;
+  commands: Collection<string, Command>;
   constructor(options: any) {
     super(options);
     this.commands = new Collection();
     this.loadCommands();
+    this.loadEvents();
     console.log("Bot is online");
   }
 
-  loadCommands() {
-    const foldersPath = path.join(__dirname, "commands");
-    const commandFolders = fs.readdirSync(foldersPath);
-    const eventsPath = path.join(__dirname, "events");
-    const eventFiles = fs
-      .readdirSync(eventsPath)
-      .filter((file) => file.endsWith(".ts"));
+  loadCommands() {}
 
-    for (const folder of commandFolders) {
-      const commandsPath = path.join(foldersPath, folder);
-      const commandFiles = fs
-        .readdirSync(commandsPath)
-        .filter((file) => file.endsWith(".js"));
-      for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
-        const command = require(filePath);
-        if ("data" in command && "execute" in command) {
-          this.commands.set(command.data.name, command);
-        } else {
-          console.log(
-            `[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`
-          );
-        }
-      }
-    }
-    for (const file of eventFiles) {
-      const filePath = path.join(eventsPath, file);
-      const event = require(filePath);
+  loadEvents() {
+    for (const event of events) {
       if (event.once) {
-        this.once(event.name, (...args) => event.execute(...args));
+        this.once(event.name, (client, interaction) =>
+          event.execute(client, interaction)
+        );
       } else {
-        this.on(event.name, (...args) => event.execute(...args));
+        this.on(event.name, (client, interaction) =>
+          event.execute(client, interaction)
+        );
       }
     }
   }

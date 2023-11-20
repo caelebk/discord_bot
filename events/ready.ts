@@ -1,9 +1,10 @@
-import { Events } from "discord.js";
+import { Events, Interaction } from "discord.js";
+import myClient from "..";
 
 export const readyEvent = {
   name: Events.ClientReady,
   once: true,
-  execute(client: any) {
-    console.log(`Ready! Logged in as ${client.user.tag}`);
+  execute(client: myClient, interaction: Interaction) {
+    console.log(`Ready! Logged in as ${client?.user?.tag}`);
   },
 };
