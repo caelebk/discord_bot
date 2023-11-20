@@ -1,62 +1,83 @@
-
 const axios = require("axios");
 const cheerio = require("cheerio");
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
-	data: new SlashCommandBuilder()
-		.setName('opgg')
-		.setDescription('Finds OPGG statistics.')
-        .addStringOption(option =>
-			option
-				.setName('username')
-				.setDescription('The username to find.')
-                .setRequired(true)),
-	async execute(interaction) {
-        const baseUrl = "https://op.gg/summoners/na/";
-        const user = interaction.options.getString("username");
-        scrape(baseUrl+user, interaction);
-	},
+  data: new SlashCommandBuilder()
+    .setName("opgg")
+    .setDescription("Finds OPGG statistics.")
+    .addStringOption((option) =>
+      option
+        .setName("username")
+        .setDescription("The username to find.")
+        .setRequired(true)
+    ),
+  async execute(interaction) {
+    const baseUrl = "https://op.gg/summoners/na/";
+    const user = interaction.options.getString("username");
+    scrape(baseUrl + user, interaction);
+  },
 };
 
-async function scrape(url, interaction){
-    const { data } = await axios.get(url);
-    const $ = cheerio.load(data);;
-    var content = $('meta[name="description"]').attr("content");
-    var stats = content.split("/");
-    for(var x = 0; x < stats.length; x++){
-        stats[x] = stats[x].trim();
-    }
-    //console.log(stats);
+async function scrape(url, interaction) {
+  const { data } = await axios.get(url);
+  const $ = cheerio.load(data);
+  let content = $('meta[name="description"]').attr("content");
+  let stats = content.split("/");
+  console.log(stats);
+  for (let x = 0; x < stats.length; x++) {
+    stats[x] = stats[x].trim();
+  }
+  //console.log(stats);
 
-    if(stats.length <= 1) {
-        interaction.reply("User doesn't exist.")
-        return;
-    }
-    var msg = concatenate(stats);
-    interaction.reply(msg);
+  if (stats.length <= 1) {
+    interaction.reply("User doesn't exist.");
+    return;
+  }
+
+  interaction.reply(createStatisticsString(stats));
 }
 
-function concatenate(strarray){
-    if (strarray.length < 4) {
-        return "**Name: **" + strarray[0] + "\n**Level: **" + strarray[2] +"\nNo Stats Found.";
-    }
-    
-    var msg = "**Name: **" +strarray[0];
+function createStatisticsString(stats) {
+  if (stats.length < 4) {
+    return (
+      "**Name: **" + stats[0] + "\n**Level: **" + stats[2] + "\nNo Stats Found."
+    );
+  }
 
-    var rankinfo = strarray[1].split(" ");
-    msg += "\n**Rank:** " + rankinfo[0] + " " + rankinfo[1] + " **|** " + rankinfo[2];
+  let msg = createNameString(stats[0]);
+  msg += createRankString(stats[1]);
+  msg += createWinRateString(stats[2]);
+  msg += createChampsString(stats[3]);
+  return msg;
+}
 
-    var ratio = strarray[2].split(" ");
-    var wr = ratio[2] + " " + "Rate:** " + ratio[4];
-    msg += "\n**" + wr + " **|** " + ratio[0] + "-" + ratio[1];
+function createNameString(name) {
+  return `**Name:** ${name}\n`;
+}
 
-    var champinfo = strarray[3].split(",");
-    msg += "\n**Most Played Champions:**";
-    msg += "\n**------------------------------**";
-    for(var x = 0; x < champinfo.length; x++){
-        msg += "\n" + champinfo[x].trim();
-    }
+function createRankString(rank) {
+  const rankinfo = rank.split(" ");
+  if (rankinfo.length < 3) {
+    return `**Rank:** ${rankinfo[0]} ${rankinfo[1]}\n`;
+  } else {
+    return `**Rank:** ${rankinfo[0]} ${rankinfo[1]} | ${rankinfo[2]}\n`;
+  }
+}
 
-    return msg;
+function createWinRateString(winrate) {
+  const ratio = winrate.split(" ");
+  return `**Win Rate:** ${ratio[4]} |  ${ratio[0].replace(
+    "Win",
+    "W"
+  )}  -  ${ratio[1].replace("Lose", "L")}\n`;
+}
+
+function createChampsString(champs) {
+  const champinfo = champs.split(",");
+  let msg = "**Most Played Champions:**\n**--------------------------**";
+  for (var x = 0; x < champinfo.length; x++) {
+    msg += "\n" + champinfo[x].trim().replace("Win", "W").replace("Lose", "L");
+  }
+  return msg + "\n";
 }
