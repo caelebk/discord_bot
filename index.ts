@@ -32,6 +32,9 @@ export default class myClient extends Client {
   }
 }
 
-const client = new myClient({ intents: [GatewayIntentBits.Guilds] });
+const client = new myClient({
+  intents: [GatewayIntentBits.Guilds],
+  allowedMentions: { parse: ["roles"], repliedUser: false },
+});
 
 client.login(BOT_TOKEN);
