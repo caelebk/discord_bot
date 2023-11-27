@@ -33,7 +33,12 @@ export default class myClient extends Client {
 }
 
 const client = new myClient({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions,
+  ],
   allowedMentions: { parse: ["roles"], repliedUser: false },
 });
 
