@@ -94,8 +94,7 @@ function parseProfile(
   const profileLevel = profile.find("span[class='level']").text();
 
   if (isWhitespace(profileName)) {
-    const msg =
-      "Profile not found or has a custom background that prevents me from parsing the profile.";
+    const msg = "Failed to parse profile.";
     throw new Error(msg);
   }
 
