@@ -17,6 +17,21 @@ export const opggCommand: Command = {
         .setDescription("The user + tag you want to find on OP.GG")
         .setRequired(true)
     )
+    .addBooleanOption((option) =>
+      option
+        .setName("DisplayProfile?")
+        .setDescription("Include profile statistics?")
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("DisplaySoloDuo?")
+        .setDescription("Include Ranked Solo/Duo statistics?")
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("DisplayFlex?")
+        .setDescription("Include Ranked Flex statistics?")
+    )
     .setName("opgg")
     .setDescription("Displays someone's opgg."),
   async execute(client: myClient, interaction: CommandInteraction) {
