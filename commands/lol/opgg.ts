@@ -141,6 +141,8 @@ function parseRankedStats(
 }
 
 function createProfileEmbed(profileStats: Profile) {
+  const opggLogoUrl =
+    "https://i0.wp.com/log.op.gg/wp-content/uploads/2022/01/cropped-opgg_favicon.png?fit=512%2C512&ssl=1";
   return new EmbedBuilder()
     .setColor(0x0099ff)
     .setTitle(`${profileStats.name}`)
@@ -157,9 +159,7 @@ function createProfileEmbed(profileStats: Profile) {
       }
     )
     .setURL(profileStats.url)
-    .setThumbnail(
-      "https://i0.wp.com/log.op.gg/wp-content/uploads/2022/01/cropped-opgg_favicon.png?fit=512%2C512&ssl=1"
-    );
+    .setThumbnail(opggLogoUrl);
 }
 
 function createRankedEmbed(profileStats: Profile, rankedStats: RankedStats) {
