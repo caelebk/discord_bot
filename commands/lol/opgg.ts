@@ -24,15 +24,17 @@ export const opggCommand: Command = {
     let username: string = input?.value as string;
     username = username.trim().replace("#", "-").replace(" ", "%20");
     console.log(username);
+
+    interaction.deferReply();
     const baseUrl = "https://op.gg/summoners/na/";
     scrape(baseUrl + username)
       .then((value: EmbedBuilder[]) => {
-        interaction.reply({ embeds: value });
+        interaction.editReply({ embeds: value });
       })
       .catch((reason: any) => {
         console.log(reason);
         const error = reason as Error;
-        interaction.reply(error.message);
+        interaction.editReply(error.message);
       });
   },
 };
@@ -48,7 +50,6 @@ async function scrape(url: string): Promise<EmbedBuilder[]> {
     .remove()
     .end()
     .text();
-
   if (isWhitespace(profileName)) {
     throw new Error(
       "Profile not found or has a custom background that prevents me from parsing the profile."
