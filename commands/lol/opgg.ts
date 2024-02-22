@@ -20,14 +20,15 @@ export const opggCommand: Command = {
     .setName("opgg")
     .setDescription("Displays someone's opgg."),
   async execute(client: myClient, interaction: CommandInteraction) {
+    const baseUrl = "https://op.gg/summoners/na/";
     const input = interaction.options.get("user");
     let username: string = input?.value as string;
     username = username.trim().replace("#", "-").replace(" ", "%20");
     console.log(username);
 
+    const userUrl = baseUrl + username;
     interaction.deferReply();
-    const baseUrl = "https://op.gg/summoners/na/";
-    scrape(baseUrl + username)
+    getUser(userUrl)
       .then((value: EmbedBuilder[]) => {
         interaction.editReply({ embeds: value });
       })
@@ -38,11 +39,44 @@ export const opggCommand: Command = {
       });
   },
 };
-async function scrape(url: string): Promise<EmbedBuilder[]> {
+
+async function getUser(url: string): Promise<EmbedBuilder[]> {
   const { data } = await axios.get(url);
   const $ = cheerio.load(data);
 
-  const profile = $(".css-1gadcid");
+  const embeds: EmbedBuilder[] = [];
+  const profileClass = ".css-1gadcid";
+  const profileStats = parseProfile($, profileClass, url);
+  const profileEmbed = createProfileEmbed(profileStats);
+  console.log(profileStats);
+  if (profileEmbed) {
+    embeds.push(profileEmbed);
+  }
+
+  const rankedSoloClass = ".css-1kw4425";
+  const rankedSoloTitle = "Ranked Solo/Duo";
+  const rankedSoloStats = parseRankedStats($, rankedSoloClass, rankedSoloTitle);
+  console.log(rankedSoloStats);
+  if (rankedSoloStats) {
+    embeds.push(createRankedEmbed(profileStats, rankedSoloStats));
+  }
+
+  const rankedFlexClass = ".css-1ialdhq";
+  const rankedFlexStats = parseRankedStats($, rankedFlexClass, "Ranked Flex");
+  console.log(rankedFlexStats);
+  if (rankedFlexStats) {
+    embeds.push(createRankedEmbed(profileStats, rankedFlexStats));
+  }
+
+  return embeds;
+}
+
+function parseProfile(
+  $: cheerio.CheerioAPI,
+  elementClass: string,
+  url: string
+) {
+  const profile = $(elementClass);
   const profileName = profile
     .find(".name")
     .clone()
@@ -50,117 +84,28 @@ async function scrape(url: string): Promise<EmbedBuilder[]> {
     .remove()
     .end()
     .text();
-  if (isWhitespace(profileName)) {
-    throw new Error(
-      "Profile not found or has a custom background that prevents me from parsing the profile."
-    );
-  }
   let profileLadder = profile.find(".rank").text();
-  profileLadder =
-    profileLadder.length > 0
-      ? profileLadder.split("\n").slice(-2).join(" ").trim()
-      : "Player has yet to play ranked.";
+  if (profileLadder.length > 0) {
+    profileLadder = profileLadder.split("\n").slice(-2).join(" ").trim();
+  } else {
+    profileLadder = "Player has yet to play ranked.";
+  }
   const profileImage = profile.find(".profile-icon").find("img").attr("src");
   const profileLevel = profile.find("span[class='level']").text();
-  const profileStats = {
+
+  if (isWhitespace(profileName)) {
+    const msg =
+      "Profile not found or has a custom background that prevents me from parsing the profile.";
+    throw new Error(msg);
+  }
+
+  return {
     name: profileName,
     ladder: profileLadder,
     imgSrc: profileImage,
     level: profileLevel,
+    url: url,
   } as Profile;
-  console.log(profileStats);
-
-  const profileEmbed = new EmbedBuilder()
-    .setColor(0x0099ff)
-    .setTitle(`${profileStats.name}`)
-    .addFields(
-      {
-        name: "Level",
-        value: profileStats.level,
-        inline: true,
-      },
-      {
-        name: "Ladder Rank",
-        value: profileStats.ladder,
-        inline: true,
-      }
-    )
-    .setThumbnail(
-      "https://i0.wp.com/log.op.gg/wp-content/uploads/2022/01/cropped-opgg_favicon.png?fit=512%2C512&ssl=1"
-    );
-
-  const embeds: EmbedBuilder[] = [profileEmbed];
-
-  const rankedSoloClass = ".css-1kw4425";
-  const rankedSoloStats = parseRankedStats(
-    $,
-    rankedSoloClass,
-    "Ranked Solo/Duo"
-  );
-  console.log(rankedSoloStats);
-  if (rankedSoloStats) {
-    const rankedSoloEmbed = new EmbedBuilder()
-      .setColor(0x0099ff)
-      .setAuthor({
-        name: profileStats.name,
-        iconURL: profileStats.imgSrc,
-        url: url,
-      })
-      .setTitle(rankedSoloStats.title)
-      .setThumbnail(rankedSoloStats.imgSrc)
-      .addFields(
-        {
-          name: rankedSoloStats.rank,
-          value: rankedSoloStats.lp,
-          inline: true,
-        },
-        {
-          name: "Win Rate",
-          value: rankedSoloStats.winRate,
-          inline: true,
-        },
-        {
-          name: "Win Loss",
-          value: rankedSoloStats.winLoss,
-          inline: true,
-        }
-      );
-    embeds.push(rankedSoloEmbed);
-  }
-
-  const rankedFlexStats = parseRankedStats($, ".css-1ialdhq", "Ranked Flex");
-  console.log(rankedFlexStats);
-  if (rankedFlexStats) {
-    const rankedFlexEmbed = new EmbedBuilder()
-      .setColor(0x0099ff)
-      .setAuthor({
-        name: profileStats.name,
-        iconURL: profileStats.imgSrc,
-        url: url,
-      })
-      .setTitle(rankedFlexStats.title)
-      .setThumbnail(rankedFlexStats.imgSrc)
-      .addFields(
-        {
-          name: rankedFlexStats.rank,
-          value: rankedFlexStats.lp,
-          inline: true,
-        },
-        {
-          name: "Win Rate",
-          value: rankedFlexStats.winRate,
-          inline: true,
-        },
-        {
-          name: "Win Loss",
-          value: rankedFlexStats.winLoss,
-          inline: true,
-        }
-      );
-    embeds.push(rankedFlexEmbed);
-  }
-
-  return embeds;
 }
 
 function parseRankedStats(
@@ -195,11 +140,63 @@ function parseRankedStats(
   } as RankedStats;
 }
 
+function createProfileEmbed(profileStats: Profile) {
+  return new EmbedBuilder()
+    .setColor(0x0099ff)
+    .setTitle(`${profileStats.name}`)
+    .addFields(
+      {
+        name: "Level",
+        value: profileStats.level,
+        inline: true,
+      },
+      {
+        name: "Ladder Rank",
+        value: profileStats.ladder,
+        inline: true,
+      }
+    )
+    .setURL(profileStats.url)
+    .setThumbnail(
+      "https://i0.wp.com/log.op.gg/wp-content/uploads/2022/01/cropped-opgg_favicon.png?fit=512%2C512&ssl=1"
+    );
+}
+
+function createRankedEmbed(profileStats: Profile, rankedStats: RankedStats) {
+  return new EmbedBuilder()
+    .setColor(0x0099ff)
+    .setAuthor({
+      name: profileStats.name,
+      iconURL: profileStats.imgSrc,
+      url: profileStats.url,
+    })
+    .setTitle(rankedStats.title)
+    .setThumbnail(rankedStats.imgSrc)
+    .addFields(
+      {
+        name: rankedStats.rank,
+        value: rankedStats.lp,
+        inline: true,
+      },
+      {
+        name: "Win Rate",
+        value: rankedStats.winRate,
+        inline: true,
+      },
+      {
+        name: "Win Loss",
+        value: rankedStats.winLoss,
+        inline: true,
+      }
+    );
+}
+
 interface Profile {
   name: string;
   ladder: string;
   imgSrc: string;
   level: string;
+  url: string;
 }
 
 interface RankedStats {
