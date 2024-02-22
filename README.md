@@ -3,6 +3,9 @@
 - should probably come up with a name other than discord bot
 
 - Porting over previous discord bot (discord.js v12) to be supported on discord.js (v14)
+- Node.js 18.13.0
+
+- npm v8.1.0
 
 ## Current Features
 
