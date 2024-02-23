@@ -18,15 +18,15 @@ export const opggCommand: Command = {
         .setRequired(true)
     )
     .addBooleanOption((option) =>
-      option.setName("profile").setDescription("Exclude profile statistics?")
+      option.setName("profile").setDescription("Include profile statistics?")
     )
     .addBooleanOption((option) =>
       option
         .setName("solo-duo")
-        .setDescription("Exclude Ranked Solo/Duo statistics?")
+        .setDescription("Include Ranked Solo/Duo statistics?")
     )
     .addBooleanOption((option) =>
-      option.setName("flex").setDescription("Exclude Ranked Flex statistics?")
+      option.setName("flex").setDescription("Include Ranked Flex statistics?")
     )
     .setName("opgg")
     .setDescription("Displays someone's opgg."),
@@ -38,24 +38,25 @@ export const opggCommand: Command = {
     username = username.trim().replace("#", "-").replace(" ", "%20");
     console.log(username);
 
-    const excludeProfileInput = Boolean(
-      interaction.options.get("profile")?.value
-    );
-    const excludeSoloDuoInput = Boolean(
-      interaction.options.get("solo-duo")?.value
-    );
-    const excludeFlexInput = Boolean(interaction.options.get("flex")?.value);
+    const includeProfileInput = interaction.options.get("profile")?.value !== undefined ? Boolean(interaction.options.get("profile")?.value) : true;
+    const includeSoloDuoInput = interaction.options.get("solo-duo")?.value !== undefined ? Boolean(interaction.options.get("solo-duo")?.value) : true;
+    const includeFlexInput = interaction.options.get("flex")?.value !== undefined ? Boolean(interaction.options.get("flex")?.value) : true;
 
+    console.log(`${includeProfileInput} ${includeSoloDuoInput} ${includeFlexInput}`)
     const userUrl = baseUrl + username;
     interaction.deferReply();
     await getUser(
       userUrl,
-      excludeProfileInput,
-      excludeSoloDuoInput,
-      excludeFlexInput
+      includeProfileInput,
+      includeSoloDuoInput,
+      includeFlexInput
     )
       .then((values: EmbedBuilder[]) => {
-        interaction.editReply({ embeds: values });
+        if (values.length === 0) {
+          interaction.editReply("Failed to retrieve content.");
+        } else {
+          interaction.editReply({ embeds: values });
+        }
       })
       .catch((reason: any) => {
         console.log(reason);
@@ -67,9 +68,9 @@ export const opggCommand: Command = {
 
 async function getUser(
   url: string,
-  excludeProfile: boolean = false,
-  excludeSoloDuo: boolean = false,
-  excludeFlex: boolean = false
+  includeProfile: boolean,
+  includeSoloDuo: boolean,
+  includeFlex: boolean
 ): Promise<EmbedBuilder[]> {
   const { data } = await axios.get(url);
   const $ = cheerio.load(data);
@@ -79,7 +80,7 @@ async function getUser(
   const profileStats = parseProfile($, profileClass, url);
   const profileEmbed = createProfileEmbed(profileStats);
   console.log(profileStats);
-  if (profileEmbed && !excludeProfile) {
+  if (profileEmbed && includeProfile) {
     embeds.push(profileEmbed);
   }
 
@@ -87,14 +88,14 @@ async function getUser(
   const rankedSoloTitle = "Ranked Solo/Duo";
   const rankedSoloStats = parseRankedStats($, rankedSoloClass, rankedSoloTitle);
   console.log(rankedSoloStats);
-  if (rankedSoloStats && !excludeSoloDuo) {
+  if (rankedSoloStats && includeSoloDuo) {
     embeds.push(createRankedEmbed(profileStats, rankedSoloStats));
   }
 
   const rankedFlexClass = ".css-1ialdhq";
   const rankedFlexStats = parseRankedStats($, rankedFlexClass, "Ranked Flex");
   console.log(rankedFlexStats);
-  if (rankedFlexStats && !excludeFlex) {
+  if (rankedFlexStats && includeFlex) {
     embeds.push(createRankedEmbed(profileStats, rankedFlexStats));
   }
 
