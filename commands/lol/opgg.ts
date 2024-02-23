@@ -38,9 +38,9 @@ export const opggCommand: Command = {
     username = username.trim().replace("#", "-").replace(" ", "%20");
     console.log(username);
 
-    const includeProfileInput = !Boolean(interaction.options.get("profile")?.value);
-    const includeSoloDuoInput = !Boolean(interaction.options.get("solo-duo")?.value);
-    const includeFlexInput = !Boolean(interaction.options.get("flex")?.value);
+    const includeProfileInput = interaction.options.get("profile")?.value !== undefined ? Boolean(interaction.options.get("profile")?.value) : true;
+    const includeSoloDuoInput = interaction.options.get("solo-duo")?.value !== undefined ? Boolean(interaction.options.get("solo-duo")?.value) : true;
+    const includeFlexInput = interaction.options.get("flex")?.value !== undefined ? Boolean(interaction.options.get("flex")?.value) : true;
 
     console.log(`${includeProfileInput} ${includeSoloDuoInput} ${includeFlexInput}`)
     const userUrl = baseUrl + username;
@@ -52,7 +52,11 @@ export const opggCommand: Command = {
       includeFlexInput
     )
       .then((values: EmbedBuilder[]) => {
-        interaction.editReply({ embeds: values });
+        if (values.length === 0) {
+          interaction.editReply("Failed to retrieve content.");
+        } else {
+          interaction.editReply({ embeds: values });
+        }
       })
       .catch((reason: any) => {
         console.log(reason);
@@ -64,9 +68,9 @@ export const opggCommand: Command = {
 
 async function getUser(
   url: string,
-  includeProfile: boolean = true,
-  includeSoloDuo: boolean = true,
-  includeFlex: boolean = true
+  includeProfile: boolean,
+  includeSoloDuo: boolean,
+  includeFlex: boolean
 ): Promise<EmbedBuilder[]> {
   const { data } = await axios.get(url);
   const $ = cheerio.load(data);
