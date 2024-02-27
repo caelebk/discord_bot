@@ -44,7 +44,7 @@ export const opggCommand: Command = {
 
     console.log(`${includeProfileInput} ${includeSoloDuoInput} ${includeFlexInput}`)
     const userUrl = baseUrl + username;
-    interaction.deferReply();
+    await interaction.deferReply();
     await getUser(
       userUrl,
       includeProfileInput,

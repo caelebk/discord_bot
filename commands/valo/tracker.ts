@@ -25,10 +25,9 @@ export const trackerCommand: Command = {
     const userInput = interaction.options.get("user");
     let username: string = userInput?.value as string;
     username = username.trim().replace("#", "%23");
-    console.log(username);
     const userUrl = `${baseUrl}${username}/overview`;
 
-    interaction.deferReply();
+    await interaction.deferReply();
     let embeds: EmbedBuilder[] = [];
 
     try {
@@ -39,9 +38,9 @@ export const trackerCommand: Command = {
     }
 
     if (embeds.length === 0) {
-      interaction.editReply("Failed to retrieve content.");
+      return interaction.editReply("Failed to retrieve content.");
     } else {
-      interaction.editReply({ embeds: embeds });
+      return interaction.editReply({ embeds: embeds });
     }
   },
 };
@@ -51,18 +50,53 @@ async function getUserEmbeds(url: string): Promise<EmbedBuilder[]> {
   const $ = cheerio.load(data);
 
   const embeds: EmbedBuilder[] = [];
-
+  const profile: ValorantProfile = parseProfile($);
   return embeds;
 }
 
-function parseProfile($: cheerio.CheerioAPI): EmbedBuilder {
-  const userImage = $().find("user-avatar__image").attr("src");
-  return new EmbedBuilder();
+function parseProfile($: cheerio.CheerioAPI): ValorantProfile {
+
+  const userContainer = $(".ph__container");
+  const userImage = userContainer.find(".user-avatar__image").attr("src");
+  const userName = userContainer.find("trn-ign__username").text();
+  if (!userImage || isWhitespace(userImage)) {
+    throw new Error("failed");
+  }
+
+  const valorantStats = {
+      trackerScore: 2,
+      KAST: 2,
+      ACS: 2,
+      damageDeltaPerRound: 2,
+      roundWinRate: 2,
+      headshotPercent: 2,
+      KD: 2,
+      ADR: 2,
+  };
+
+  const valorantRank = {
+    title: "",
+    imgUrl: "",
+    rr: "",
+  };
+
+  const valorantMatchHistory = {
+    winRate: 2,
+    wins: 2,
+    losses: 2
+  }
+  console.log(userImage);
+  return {
+    username: userName,
+    imgUrl: userImage,
+    rank: valorantRank,
+    stats: valorantStats,
+    matchHistory: valorantMatchHistory
+  };
 }
 
-interface TrackerProfile {
+interface ValorantProfile {
   username: string;
-  level: number;
   imgUrl: string;
   rank: ValorantRank;
   stats: ValorantStatistics;
@@ -89,5 +123,5 @@ interface ValorantMatchHistory {
 interface ValorantRank {
   title: string;
   imgUrl: string;
-  rr: string;
+  rr?: string;
 }
