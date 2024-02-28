@@ -51,6 +51,7 @@ async function getUserEmbeds(url: string): Promise<EmbedBuilder[]> {
 
   const embeds: EmbedBuilder[] = [];
   const profile: ValorantProfile = parseProfile($);
+  console.log(profile);
   return embeds;
 }
 
@@ -58,66 +59,100 @@ function parseProfile($: cheerio.CheerioAPI): ValorantProfile {
 
   const userContainer = $(".ph__container");
   const userImage = userContainer.find(".user-avatar__image").attr("src");
-  const userName = userContainer.find("trn-ign__username").text();
+  const userName = userContainer.find(".trn-ign__username").text();
   if (!userImage || isWhitespace(userImage)) {
-    throw new Error("failed");
+    throw new Error("failed to find image");
   }
 
-  const valorantStats = {
-      trackerScore: 2,
-      KAST: 2,
-      ACS: 2,
-      damageDeltaPerRound: 2,
-      roundWinRate: 2,
-      headshotPercent: 2,
-      KD: 2,
-      ADR: 2,
-  };
+  const highlightContainer = $(".highlighted");
+  const levelContainer = highlightContainer.find('.stat__label:contains("Level")').parent();
+  const level = levelContainer.find('.stat__value').text().trim();
+
+  const rankContainer = highlightContainer.find('.stat__label:contains("Rating")').parent();
+  const rank = rankContainer.find('.stat__value').text().trim();
+  const rankImage = highlightContainer.find(".trn-profile-highlighted-content__icon").attr("src");
+
+  if (!rankImage) {
+    throw new Error("failed to find image");
+  }
 
   const valorantRank = {
-    title: "",
-    imgUrl: "",
-    rr: "",
+    title: rank,
+    imgUrl: rankImage,
+    rr: "Information not provided.",
   };
 
-  const valorantMatchHistory = {
-    winRate: 2,
-    wins: 2,
-    losses: 2
+  const statsContainer = $(".area-main-stats");
+  const scoreContainer = statsContainer.find(".score__container");
+  const score = scoreContainer.find(".value").contents().first().text().trim();
+  const scoreImage = scoreContainer.find(".score__emblem").attr("src");
+
+  if (!scoreImage) {
+    throw new Error("failed to find image");
   }
-  console.log(userImage);
+
+  const giantStatsContainer = statsContainer.find(".giant-stats");
+  const damagePerRoundContainer = giantStatsContainer.find('[title="Damage/Round"]').parent();
+  const damagePerRound = damagePerRoundContainer.find(".value").text().trim();
+
+  const kdContainer = giantStatsContainer.find('[title="K/D Ratio"]').parent();
+  const KD = kdContainer.find(".value").text().trim();
+
+  const headshotPercentContainer = giantStatsContainer.find('[title="Headshot %"]').parent();
+  const headshotPercent = headshotPercentContainer.find(".value").text().trim();
+
+  const winRateContainer = giantStatsContainer.find('[title="Win %"]').parent();
+  const winRate = winRateContainer.find(".value").text().trim();
+
+  const mainStatsContainer = statsContainer.find(".main");
+  const kastContainer = mainStatsContainer.find('[title="KAST"]').parent();
+  const KAST = kastContainer.find(".value").text().trim();
+
+  const damageDeltaContainer = mainStatsContainer.find('[title="DDΔ/Round"]').parent();
+  const ddPerRound = damageDeltaContainer.find(".value").text().trim();
+
+  const acsContainer = mainStatsContainer.find('[title="ACS"]').parent();
+  const ACS = acsContainer.find(".value").text().trim();
+
+  const valorantStats = {
+      trackerScore: Number(score),
+      trackerImage: scoreImage,
+      KAST: KAST,
+      ACS: Number(ACS),
+      damageDeltaPerRound: Number(ddPerRound),
+      winRate: winRate,
+      headshotPercent: headshotPercent,
+      KD: Number(KD),
+      ADR: Number(damagePerRound),
+  } as ValorantStatistics;
+
   return {
     username: userName,
+    level: Number(level),
     imgUrl: userImage,
     rank: valorantRank,
     stats: valorantStats,
-    matchHistory: valorantMatchHistory
   };
 }
 
 interface ValorantProfile {
   username: string;
   imgUrl: string;
+  level: number;
   rank: ValorantRank;
   stats: ValorantStatistics;
-  matchHistory: ValorantMatchHistory;
 }
 
 interface ValorantStatistics {
   trackerScore: number;
-  KAST: number;
+  trackerImage: string;
+  KAST: string;
   ACS: number;
   damageDeltaPerRound: number;
-  roundWinRate: number;
-  headshotPercent: number;
+  winRate: string;
+  headshotPercent: string;
   KD: number;
   ADR: number;
-}
-
-interface ValorantMatchHistory {
-  winRate: number;
-  wins: number;
-  losses: number;
 }
 
 interface ValorantRank {
