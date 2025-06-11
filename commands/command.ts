@@ -10,9 +10,4 @@ export interface Command {
   execute: (client: myClient, interaction: CommandInteraction) => void;
 }
 
-export const commandList: Command[] = [
-  serverCommand,
-  partyCommand,
-  opggCommand,
-  trackerCommand
-];
+export const commandList: Command[] = [serverCommand, partyCommand];

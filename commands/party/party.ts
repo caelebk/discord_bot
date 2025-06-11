@@ -24,53 +24,47 @@ export const partyCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("party")
     .setDescription("Starts a party"),
+
   async execute(client: myClient, interaction: CommandInteraction) {
-    const partyMessageComponents = createPartyMessageComponents();
-    const partyMessageOptions: InteractionReplyOptions = {
-      content: `Party options:\n\nStart Time: 2 hours from now\nTimeout: 1 hour\n\nSelect Roles:`,
-      components: partyMessageComponents,
-      ephemeral: false,
-    };
-
-    const partyMessage: InteractionResponse = await interaction.reply(
-      partyMessageOptions
-    );
-
-    let selectedRoles: string[] = [];
+    const selectedRoles: string[] = [];
     const usersInParty: Set<User> = new Set<User>([]);
 
-    const collectorFilter = (i: MessageComponentInteraction) =>
+    const partyComponents = createPartyOptionsUI();
+    const partyOptions: InteractionReplyOptions = {
+      content: `Party options:\n\nStart Time: 2 hours from now\nTimeout: 1 hour\n\nSelect Roles:`,
+      components: partyComponents,
+      ephemeral: true,
+    };
+
+    const partyInitMsg: InteractionResponse = await interaction.reply(
+      partyOptions
+    );
+
+    const userFilter = (i: MessageComponentInteraction) =>
       i.user.id === interaction.user.id;
 
-    const minuteInMs = 60_000;
-    const buttonCollector = partyMessage.createMessageComponentCollector({
-      filter: collectorFilter,
-      componentType: ComponentType.Button,
-      time: minuteInMs,
-    });
-
-    const roleCollector = partyMessage.createMessageComponentCollector({
-      filter: collectorFilter,
+    const roleCollector = partyInitMsg.createMessageComponentCollector({
+      filter: userFilter,
       componentType: ComponentType.RoleSelect,
-      time: minuteInMs,
+      time: 60_000, // 1 minute in milliseconds
     });
 
-    roleCollector.on(
-      "collect",
-      (roleInteraction: RoleSelectMenuInteraction) => {
-        roleInteraction.deferUpdate();
-        if (roleInteraction) {
-          selectedRoles = roleInteraction.values;
-          if (selectedRoles.length > 0) {
-            partyMessageOptions.components =
-              createPartyMessageComponents(false);
-          } else {
-            partyMessageOptions.components = createPartyMessageComponents(true);
-          }
-          partyMessage.edit(partyMessageOptions);
-        }
+    const buttonCollector = partyInitMsg.createMessageComponentCollector({
+      filter: userFilter,
+      componentType: ComponentType.Button,
+      time: 60_000,
+    });
+
+    roleCollector.on("collect", (interaction: RoleSelectMenuInteraction) => {
+      interaction.deferUpdate();
+      selectedRoles.splice(0, selectedRoles.length, ...interaction.values);
+      if (selectedRoles.length > 0) {
+        partyOptions.components = createPartyOptionsUI(false);
+      } else {
+        partyOptions.components = createPartyOptionsUI(true);
       }
-    );
+      partyInitMsg.edit(partyOptions);
+    });
 
     buttonCollector.once(
       "collect",
@@ -80,28 +74,28 @@ export const partyCommand: Command = {
         const mentionedRoleIds: string[] = selectedRoles.map(
           (id: string) => `<@&${id}>`
         );
-        const partyStatusMessage: InteractionReplyOptions = handlePartySubmit(
+
+        await partyInitMsg.delete();
+        const partyStatusOptions: InteractionReplyOptions = handlePartySubmit(
           buttonInteraction,
           mentionedRoleIds,
           usersInParty
         );
-        const partyStatusResponse: InteractionResponse =
-          await buttonInteraction.reply(partyStatusMessage);
-        if (!partyStatusMessage.ephemeral) {
-          await handleReactions(
-            partyStatusResponse,
-            usersInParty,
-            mentionedRoleIds
-          );
+        const partyStatusMsg: InteractionResponse =
+          await buttonInteraction.reply(partyStatusOptions);
+        if (!partyStatusOptions.ephemeral) {
+          await handleReactions(partyStatusMsg, usersInParty, mentionedRoleIds);
         }
       }
     );
 
-    roleCollector.on("end", (collected, reason: string) => {
-      partyMessage.delete();
+    roleCollector.on("end", async (_, reason: string) => {
       if (reason !== "user") {
+        try {
+          await partyInitMsg.delete();
+        } catch {}
         interaction.followUp({
-          content: "Party has timed out.",
+          content: "Party setup has timed out.",
           ephemeral: true,
         });
       }
@@ -112,7 +106,7 @@ export const partyCommand: Command = {
 /*
     Mesage component creator function for better readability.
 */
-function createPartyMessageComponents(
+function createPartyOptionsUI(
   disabled: boolean = true
 ): APIActionRowComponent<APIMessageActionRowComponent>[] {
   const confirm = new ButtonBuilder()
