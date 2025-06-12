@@ -1,30 +1,189 @@
-import { Events, BaseInteraction, CommandInteraction } from "discord.js";
-import myClient from "..";
-import { Command } from "../commands/command";
+import {
+  Events,
+  BaseInteraction,
+  CommandInteraction,
+  Message,
+  ButtonBuilder,
+  ButtonStyle,
+  ActionRowBuilder,
+  MessageComponentInteraction,
+  ComponentType,
+  ButtonInteraction,
+  MessageReaction,
+  User,
+} from 'discord.js';
+import myClient from '..';
+import { Command } from '../commands/command';
+import { clearPartyContext, getPartyContext } from '../commands/party/partyContext';
+import { createPartySearchMessageUI } from '../commands/party/partyUI';
+import { convertIDsToMentions } from '../commands/party/party';
 
 export const interactionCreateEvent = {
   name: Events.InteractionCreate,
   once: false,
-  execute(client: myClient, interaction: BaseInteraction) {
-    if (!interaction.isChatInputCommand()) return;
-    const chatInteraction = interaction as CommandInteraction;
+  async execute(client: myClient, interaction: BaseInteraction) {
+    if (interaction.isChatInputCommand()) {
+      const chatInteraction = interaction as CommandInteraction;
+      const command: Command | undefined = client?.commands?.get(chatInteraction.commandName);
 
-    const command: Command | undefined = client?.commands?.get(
-      chatInteraction.commandName
-    );
+      if (!command) {
+        console.error(`No command matching ${chatInteraction.commandName} was found.`);
+        return;
+      }
 
-    if (!command) {
-      console.error(
-        `No command matching ${chatInteraction.commandName} was found.`
-      );
-      return;
+      try {
+        command.execute(client, chatInteraction);
+      } catch (error) {
+        console.error(`Error executing ${chatInteraction.commandName}`);
+        console.error(error);
+      }
     }
 
-    try {
-      command.execute(client, chatInteraction);
-    } catch (error) {
-      console.error(`Error executing ${chatInteraction.commandName}`);
-      console.error(error);
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'partyModal') {
+        const authorId = interaction.user.id;
+        const context = getPartyContext(authorId);
+
+        if (!context) {
+          await interaction.reply({
+            content: 'Session expired. Please run `/party` again.',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const { selectedRoles, joinSet } = context;
+        const fillSet = new Set<string>();
+
+        const partySize = parseInt(interaction.fields.getTextInputValue('partySize') || '0', 10);
+        const startDelay = parseInt(interaction.fields.getTextInputValue('startTime') || '0', 10);
+        const duration = parseInt(interaction.fields.getTextInputValue('duration') || '60', 10);
+
+        if (isNaN(partySize) || partySize <= 0) {
+          clearPartyContext(authorId);
+          await interaction.reply({
+            content: '❌ Invalid party size. Please enter a positive number.',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const { content, components } = createPartySearchMessageUI(startDelay, duration, partySize, selectedRoles);
+
+        const updatedPartyMessage = () => {
+          const joined = convertIDsToMentions(joinSet) || 'None';
+          const fillers = convertIDsToMentions(fillSet) || 'None';
+          const newContent =
+            `${content}\n` +
+            `> ✅ **Joined (${joinSet.size}/${partySize})**: ${joined}\n` +
+            `> 🧩 **Fillers**: ${fillers}\n` +
+            `React with ✅ to join/leave or 🧩 to fill/unfill.\nFor multiple users, use the dropdown:`;
+          return newContent;
+        };
+
+        await interaction.reply({
+          content: updatedPartyMessage(),
+          components,
+          fetchReply: true,
+        });
+
+        const partyMessage = (await interaction.fetchReply()) as Message;
+
+        await Promise.all([partyMessage.react('✅'), partyMessage.react('🧩')]);
+
+        const handlePartyEnd = async () => {
+          clearPartyContext(authorId);
+          try {
+            await partyMessage.reactions.removeAll();
+            await partyMessage.delete();
+          } catch {}
+        };
+
+        if (joinSet.size > 0) {
+          if (joinSet.size >= partySize) {
+            handlePartyEnd();
+            await partyMessage.reply({
+              content: `✅ The party is full!\nParty: ${convertIDsToMentions(joinSet)}`,
+              components: [],
+              allowedMentions: { users: Array.from(joinSet) },
+            });
+            return;
+          }
+          partyMessage.edit(updatedPartyMessage());
+        }
+
+        const durationInMs = duration * 60_000;
+
+        const reactionCollector = partyMessage.createReactionCollector({
+          time: durationInMs,
+          dispose: true,
+        });
+
+        reactionCollector.on('collect', (reaction: MessageReaction, user: User) => {
+          if (user.bot) return;
+
+          const emoji = reaction.emoji.name;
+          if (emoji === '✅') {
+            joinSet.add(user.id);
+            fillSet.delete(user.id);
+          } else if (emoji === '🧩' && !joinSet.has(user.id)) {
+            fillSet.add(user.id);
+          }
+
+          partyMessage.edit(updatedPartyMessage());
+
+          if (joinSet.size >= partySize) {
+            buttonCollector.stop();
+            reactionCollector.stop('full');
+          }
+        });
+
+        reactionCollector.on('remove', (reaction, user) => {
+          if (user.bot) return;
+
+          const emoji = reaction.emoji.name;
+          if (emoji === '✅') {
+            joinSet.delete(user.id);
+          } else if (emoji === '🧩') {
+            fillSet.delete(user.id);
+          }
+
+          partyMessage.edit(updatedPartyMessage());
+        });
+
+        reactionCollector.on('end', async (_, reason) => {
+          if (reason === 'full') {
+            handlePartyEnd();
+            await partyMessage.reply({
+              content: `✅ The party is full!\nParty: ${convertIDsToMentions(joinSet)}`,
+              components: [],
+              allowedMentions: { users: Array.from(joinSet) },
+            });
+          } else {
+            if (reason != 'cancelButton') {
+              handlePartyEnd();
+              partyMessage.reply('⌛ Party search timed out.');
+            }
+          }
+        });
+
+        const buttonCollector = partyMessage.createMessageComponentCollector({
+          filter: (i) => i.user.id === authorId,
+          componentType: ComponentType.Button,
+          time: durationInMs,
+        });
+
+        buttonCollector.once('collect', async (buttonInteraction: ButtonInteraction) => {
+          buttonInteraction.deferUpdate();
+          handlePartyEnd();
+          try {
+            await partyMessage.reply('❌ Party has been cancelled.');
+          } catch {}
+          buttonCollector.stop();
+          reactionCollector.stop('cancelButton');
+          return;
+        });
+      }
     }
   },
 };
