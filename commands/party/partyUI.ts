@@ -81,7 +81,7 @@ export function createPartyOptionsUI(disabled: boolean = true): APIActionRowComp
   return [roleRow, userRow, buttonRow];
 }
 
-export function createPartySearchMessageUI(
+export function createPartySearchMsgUI(
   startDelay: number,
   duration: number,
   partySize: number,

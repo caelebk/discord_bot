@@ -1,13 +1,11 @@
 import {
   CommandInteraction,
   SlashCommandBuilder,
-  MessageComponentInteraction,
   ComponentType,
   RoleSelectMenuInteraction,
   ButtonInteraction,
   InteractionResponse,
   InteractionReplyOptions,
-  User,
   UserSelectMenuInteraction,
 } from 'discord.js';
 import { Command } from '../command';
@@ -18,10 +16,12 @@ export const partyCommand: Command = {
   data: new SlashCommandBuilder().setName('party').setDescription('Starts a party'),
 
   async execute(_, interaction: CommandInteraction) {
+    const authorId = interaction.user.id;
+
     if (getPartyContext(interaction?.user?.id)) {
       try {
         await interaction.reply({
-          content: 'Party search already in progress.',
+          content: '❌ Party search already in progress.',
           ephemeral: true,
         });
       } catch {}
@@ -38,23 +38,20 @@ export const partyCommand: Command = {
 
     const partyInitMsg: InteractionResponse = await interaction.reply(partyOptions);
 
-    const userFilter = (i: MessageComponentInteraction) => i.user.id === interaction.user.id;
-
-    //filter for only current user's interactions for the party options
     const roleCollector = partyInitMsg.createMessageComponentCollector({
-      filter: userFilter,
+      filter: (i) => i.user.id === authorId,
       componentType: ComponentType.RoleSelect,
       time: 60_000, // 1 minute in milliseconds
     });
 
     const buttonCollector = partyInitMsg.createMessageComponentCollector({
-      filter: userFilter,
+      filter: (i) => i.user.id === authorId,
       componentType: ComponentType.Button,
       time: 60_000,
     });
 
     const userCollector = partyInitMsg.createMessageComponentCollector({
-      filter: userFilter,
+      filter: (i) => i.user.id === authorId,
       componentType: ComponentType.UserSelect,
       time: 60_000,
     });
@@ -83,7 +80,7 @@ export const partyCommand: Command = {
     roleCollector.on('end', async (_, reason: string) => {
       if (reason !== 'user') {
         await partyInitMsg.edit({
-          content: 'Role Selection has timed out.',
+          content: '⌛ Role selection has timed out.',
           components: [],
         });
       }
@@ -101,15 +98,14 @@ export const partyCommand: Command = {
 
       if (buttonInteraction.customId === 'cancelRoles') {
         buttonInteraction.reply({
-          content: 'Party has been cancelled.',
+          content: '❌ Party search has been cancelled.',
           ephemeral: true,
         });
         return;
       }
 
-      joinSet.add(interaction.user.id);
-      //store context by user ID of party creator
-      setPartyContext(interaction.user.id, {
+      joinSet.add(authorId);
+      setPartyContext(authorId, {
         selectedRoles: [...selectedRoles],
         joinSet: joinSet,
       });

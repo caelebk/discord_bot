@@ -3,10 +3,6 @@ import {
   BaseInteraction,
   CommandInteraction,
   Message,
-  ButtonBuilder,
-  ButtonStyle,
-  ActionRowBuilder,
-  MessageComponentInteraction,
   ComponentType,
   ButtonInteraction,
   MessageReaction,
@@ -15,7 +11,7 @@ import {
 import myClient from '..';
 import { Command } from '../commands/command';
 import { clearPartyContext, getPartyContext } from '../commands/party/partyContext';
-import { createPartySearchMessageUI } from '../commands/party/partyUI';
+import { createPartySearchMsgUI } from '../commands/party/partyUI';
 import { convertIDsToMentions } from '../commands/party/party';
 
 export const interactionCreateEvent = {
@@ -68,9 +64,9 @@ export const interactionCreateEvent = {
           return;
         }
 
-        const { content, components } = createPartySearchMessageUI(startDelay, duration, partySize, selectedRoles);
+        const { content, components } = createPartySearchMsgUI(startDelay, duration, partySize, selectedRoles);
 
-        const updatedPartyMessage = () => {
+        const updatedPartyMsg = () => {
           const joined = convertIDsToMentions(joinSet) || 'None';
           const fillers = convertIDsToMentions(fillSet) || 'None';
           const newContent =
@@ -82,39 +78,39 @@ export const interactionCreateEvent = {
         };
 
         await interaction.reply({
-          content: updatedPartyMessage(),
+          content: updatedPartyMsg(),
           components,
           fetchReply: true,
         });
 
-        const partyMessage = (await interaction.fetchReply()) as Message;
+        const partySearchMsg = (await interaction.fetchReply()) as Message;
 
-        await Promise.all([partyMessage.react('✅'), partyMessage.react('🧩')]);
+        await Promise.all([partySearchMsg.react('✅'), partySearchMsg.react('🧩')]);
 
         const handlePartyEnd = async () => {
           clearPartyContext(authorId);
           try {
-            await partyMessage.reactions.removeAll();
-            await partyMessage.delete();
+            await partySearchMsg.reactions.removeAll();
+            await partySearchMsg.delete();
           } catch {}
         };
 
         if (joinSet.size > 0) {
           if (joinSet.size >= partySize) {
             handlePartyEnd();
-            await partyMessage.reply({
+            await partySearchMsg.reply({
               content: `✅ The party is full!\nParty: ${convertIDsToMentions(joinSet)}`,
               components: [],
               allowedMentions: { users: Array.from(joinSet) },
             });
             return;
           }
-          partyMessage.edit(updatedPartyMessage());
+          partySearchMsg.edit(updatedPartyMsg());
         }
 
         const durationInMs = duration * 60_000;
 
-        const reactionCollector = partyMessage.createReactionCollector({
+        const reactionCollector = partySearchMsg.createReactionCollector({
           time: durationInMs,
           dispose: true,
         });
@@ -130,7 +126,7 @@ export const interactionCreateEvent = {
             fillSet.add(user.id);
           }
 
-          partyMessage.edit(updatedPartyMessage());
+          partySearchMsg.edit(updatedPartyMsg());
 
           if (joinSet.size >= partySize) {
             buttonCollector.stop();
@@ -148,13 +144,13 @@ export const interactionCreateEvent = {
             fillSet.delete(user.id);
           }
 
-          partyMessage.edit(updatedPartyMessage());
+          partySearchMsg.edit(updatedPartyMsg());
         });
 
         reactionCollector.on('end', async (_, reason) => {
           if (reason === 'full') {
             handlePartyEnd();
-            await partyMessage.reply({
+            await partySearchMsg.reply({
               content: `✅ The party is full!\nParty: ${convertIDsToMentions(joinSet)}`,
               components: [],
               allowedMentions: { users: Array.from(joinSet) },
@@ -162,12 +158,12 @@ export const interactionCreateEvent = {
           } else {
             if (reason != 'cancelButton') {
               handlePartyEnd();
-              partyMessage.reply('⌛ Party search timed out.');
+              partySearchMsg.reply('⌛ Party search timed out.');
             }
           }
         });
 
-        const buttonCollector = partyMessage.createMessageComponentCollector({
+        const buttonCollector = partySearchMsg.createMessageComponentCollector({
           filter: (i) => i.user.id === authorId,
           componentType: ComponentType.Button,
           time: durationInMs,
@@ -177,7 +173,7 @@ export const interactionCreateEvent = {
           buttonInteraction.deferUpdate();
           handlePartyEnd();
           try {
-            await partyMessage.reply('❌ Party has been cancelled.');
+            await partySearchMsg.reply('❌ Party has been cancelled.');
           } catch {}
           buttonCollector.stop();
           reactionCollector.stop('cancelButton');
