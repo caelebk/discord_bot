@@ -7,10 +7,18 @@ import {
   InteractionResponse,
   InteractionReplyOptions,
   UserSelectMenuInteraction,
+  User,
+  Collection,
 } from 'discord.js';
 import { Command } from '../command';
 import { createPartyModal, createPartyOptionsUI } from './partyUI';
 import { getPartyContext, setPartyContext } from './partyContext';
+
+//TODO:
+// 1. proxies
+// 2. user select state management
+// 3. timer
+// 4. fillers queue
 
 export const partyCommand: Command = {
   data: new SlashCommandBuilder().setName('party').setDescription('Starts a party'),
@@ -25,10 +33,12 @@ export const partyCommand: Command = {
           ephemeral: true,
         });
       } catch {}
+      return;
     }
 
     const selectedRoles: string[] = [];
     const joinSet: Set<string> = new Set<string>([]);
+    const proxyMap: Map<string, string> = new Map<string, string>();
 
     const partyComponents = createPartyOptionsUI();
     const partyOptions: InteractionReplyOptions = {
@@ -57,11 +67,11 @@ export const partyCommand: Command = {
     });
 
     userCollector.on('collect', async (interaction: UserSelectMenuInteraction) => {
-      interaction.deferUpdate();
-      if (interaction?.users?.values)
-        for (const user of interaction.users.values()) {
-          joinSet.add(user.id);
-        }
+      if (interaction.customId === 'includedUsers') {
+        const userIds = interaction.users.map((user) => user.id);
+        handleProxyUpdate(authorId, userIds, proxyMap, joinSet);
+      }
+      await interaction.deferUpdate();
     });
 
     //Subscription for handling when users select one or more roles.
@@ -106,8 +116,9 @@ export const partyCommand: Command = {
 
       joinSet.add(authorId);
       setPartyContext(authorId, {
-        selectedRoles: [...selectedRoles],
-        joinSet: joinSet,
+        selectedRoles,
+        joinSet,
+        proxyMap,
       });
 
       await createPartyModal(buttonInteraction);
@@ -115,6 +126,35 @@ export const partyCommand: Command = {
   },
 };
 
-export function convertIDsToMentions(users: Set<string>): string {
-  return [...users].map((id) => `<@${id}>`).join(', ');
+export function convertIDsToMentions(users: Set<string>, separator: string = `\n`): string {
+  return [...users].map((id) => `<@${id}>`).join(separator);
+}
+
+export function convertProxiesToMentions(proxyMap: Map<string, string>): string {
+  let proxySummary = '';
+  for (const [proxiedId, proxyId] of proxyMap.entries()) {
+    proxySummary += `<@${proxiedId}> (added by <@${proxyId}>)\n`;
+  }
+  return proxySummary;
+}
+
+export function handleProxyUpdate(
+  authorId: string,
+  userIds: string[],
+  proxyMap: Map<string, string>,
+  joinSet: Set<string>
+) {
+  for (const [proxiedId, proxyId] of proxyMap.entries()) {
+    if (proxyId === authorId && !userIds.includes(proxiedId)) {
+      proxyMap.delete(proxiedId);
+    }
+  }
+  userIds.forEach((userId: string) => {
+    if (userId === authorId) {
+      return;
+    }
+    if (!proxyMap.has(userId) && !joinSet.has(userId)) {
+      proxyMap.set(userId, authorId);
+    }
+  });
 }

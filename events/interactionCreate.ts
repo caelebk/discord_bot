@@ -7,12 +7,13 @@ import {
   ButtonInteraction,
   MessageReaction,
   User,
+  UserSelectMenuInteraction,
 } from 'discord.js';
 import myClient from '..';
 import { Command } from '../commands/command';
 import { clearPartyContext, getPartyContext } from '../commands/party/partyContext';
 import { createPartySearchMsgUI } from '../commands/party/partyUI';
-import { convertIDsToMentions } from '../commands/party/party';
+import { convertIDsToMentions, convertProxiesToMentions, handleProxyUpdate } from '../commands/party/party';
 
 export const interactionCreateEvent = {
   name: Events.InteractionCreate,
@@ -48,7 +49,7 @@ export const interactionCreateEvent = {
           return;
         }
 
-        const { selectedRoles, joinSet } = context;
+        const { selectedRoles, joinSet, proxyMap } = context;
         const fillSet = new Set<string>();
 
         const partySize = parseInt(interaction.fields.getTextInputValue('partySize') || '0', 10);
@@ -65,15 +66,22 @@ export const interactionCreateEvent = {
         }
 
         const { content, components } = createPartySearchMsgUI(startDelay, duration, partySize, selectedRoles);
+        const joinedSize = () => joinSet.size + proxyMap.size;
 
         const updatedPartyMsg = () => {
-          const joined = convertIDsToMentions(joinSet) || 'None';
-          const fillers = convertIDsToMentions(fillSet) || 'None';
+          const joined = convertIDsToMentions(joinSet);
+          const fillers = convertIDsToMentions(fillSet);
+          const proxies = convertProxiesToMentions(proxyMap) || ``;
+
+          const allJoinedIds = joinedSize() > 0 ? `\n${joined}\n${proxies}`.trimEnd() : `None`;
+          const fillerString = fillers.length > 0 ? `\n${fillers}` : `None`;
+
           const newContent =
             `${content}\n` +
-            `> ✅ **Joined (${joinSet.size}/${partySize})**: ${joined}\n` +
-            `> 🧩 **Fillers**: ${fillers}\n` +
-            `React with ✅ to join/leave or 🧩 to fill/unfill.\nFor multiple users, use the dropdown:`;
+            `> ✅ **Joined (${joinedSize()}/${partySize})**: ` +
+            `${allJoinedIds}` +
+            `\n> 🧩 **Fillers**: ${fillerString}` +
+            `\n> React with ✅ to join/leave or 🧩 to fill/unfill.`;
           return newContent;
         };
 
@@ -115,6 +123,25 @@ export const interactionCreateEvent = {
           dispose: true,
         });
 
+        const userCollector = partySearchMsg.createMessageComponentCollector({
+          componentType: ComponentType.UserSelect,
+          time: durationInMs,
+        });
+
+        const buttonCollector = partySearchMsg.createMessageComponentCollector({
+          filter: (i) => i.user.id === authorId,
+          componentType: ComponentType.Button,
+          time: durationInMs,
+        });
+
+        const handleFullParty = () => {
+          if (joinSet.size + proxyMap.size >= partySize) {
+            buttonCollector.stop();
+            userCollector.stop();
+            reactionCollector.stop('full');
+          }
+        };
+
         reactionCollector.on('collect', (reaction: MessageReaction, user: User) => {
           if (user.bot) return;
 
@@ -127,11 +154,7 @@ export const interactionCreateEvent = {
           }
 
           partySearchMsg.edit(updatedPartyMsg());
-
-          if (joinSet.size >= partySize) {
-            buttonCollector.stop();
-            reactionCollector.stop('full');
-          }
+          handleFullParty();
         });
 
         reactionCollector.on('remove', (reaction, user) => {
@@ -140,6 +163,11 @@ export const interactionCreateEvent = {
           const emoji = reaction.emoji.name;
           if (emoji === '✅') {
             joinSet.delete(user.id);
+            for (const [proxiedId, proxyId] of proxyMap.entries()) {
+              if (proxyId === user.id) {
+                proxyMap.delete(proxiedId);
+              }
+            }
           } else if (emoji === '🧩') {
             fillSet.delete(user.id);
           }
@@ -150,23 +178,29 @@ export const interactionCreateEvent = {
         reactionCollector.on('end', async (_, reason) => {
           if (reason === 'full') {
             handlePartyEnd();
+
+            const proxyMentions = proxyMap.size > 0 ? `, ${convertIDsToMentions(new Set(proxyMap.keys()), ', ')}` : ``;
             await partySearchMsg.reply({
-              content: `✅ The party is full!\nParty: ${convertIDsToMentions(joinSet)}`,
+              content: `✅ The party is full!\n${convertIDsToMentions(joinSet, ', ') + proxyMentions}`,
               components: [],
               allowedMentions: { users: Array.from(joinSet) },
             });
           } else {
-            if (reason != 'cancelButton') {
-              handlePartyEnd();
-              partySearchMsg.reply('⌛ Party search timed out.');
-            }
+            handlePartyEnd();
+            try {
+              await partySearchMsg.reply('⌛ Party search timed out.');
+            } catch {}
           }
         });
 
-        const buttonCollector = partySearchMsg.createMessageComponentCollector({
-          filter: (i) => i.user.id === authorId,
-          componentType: ComponentType.Button,
-          time: durationInMs,
+        userCollector.on('collect', async (interaction: UserSelectMenuInteraction) => {
+          if (interaction.customId === 'additionalUsers' && joinSet.has(interaction.user.id)) {
+            const userIds = interaction.users.map((user: User) => user.id);
+            handleProxyUpdate(interaction.user.id, userIds, proxyMap, joinSet);
+            partySearchMsg.edit(updatedPartyMsg());
+          }
+          handleFullParty();
+          await interaction.deferUpdate();
         });
 
         buttonCollector.once('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -175,8 +209,6 @@ export const interactionCreateEvent = {
           try {
             await partySearchMsg.reply('❌ Party has been cancelled.');
           } catch {}
-          buttonCollector.stop();
-          reactionCollector.stop('cancelButton');
           return;
         });
       }

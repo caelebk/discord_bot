@@ -3,6 +3,7 @@
 type PartyContext = {
   selectedRoles: string[];
   joinSet: Set<string>;
+  proxyMap: Map<string, string>; // <proxyUserId, Set<UserIds>>
 };
 
 const partyCache: Map<string, PartyContext> = new Map();

@@ -64,7 +64,7 @@ export function createPartyOptionsUI(disabled: boolean = true): APIActionRowComp
 
   const userSelect = new UserSelectMenuBuilder()
     .setCustomId('includedUsers')
-    .setPlaceholder('(Optional) Select users to include.')
+    .setPlaceholder('(Optional) Select/unselect users to include.')
     .setMinValues(0)
     .setMaxValues(10);
 
@@ -101,11 +101,13 @@ export function createPartySearchMsgUI(
     `> ⏳ **Start Time: **${
       startDelay ? `${new Date(partyTime).toLocaleTimeString().slice(0, -6)}` : 'now'
     } (${discordStartTime})\n` +
-    `> ⌛ **End Time: **${discordEndTime}`;
+    `> ⏳ **End Time: **${
+      duration ? `${new Date(endTime).toLocaleTimeString().slice(0, -6)}` : 'now'
+    } (${discordEndTime})`;
   const cancelButton = new ButtonBuilder().setCustomId('cancelParty').setLabel('Cancel').setStyle(ButtonStyle.Danger);
   const userSelect = new UserSelectMenuBuilder()
     .setCustomId('additionalUsers')
-    .setPlaceholder('(Optional) Select additional users to include.')
+    .setPlaceholder(`Select/unselect users to add (if you've joined)`)
     .setMinValues(0)
     .setMaxValues(partySize);
 
