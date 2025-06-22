@@ -140,21 +140,13 @@ export const interactionCreateEvent = {
         });
 
         const handleFullParty = async () => {
-          console.log('check');
           if (joinSet.size + proxyMap.size >= partySize) {
-            console.log('stop');
             buttonCollector.stop();
             userCollector.stop();
             reactionCollector.stop('full');
           } else if (joinSet.size + fillQueue.size() >= partySize) {
-            console.log(`test 1 ${Array.from(joinSet)}, ${fillQueue.getAll()}`);
-            // const temp = await handleFillers(partySearchMsg, fillQueue, joinSet);
-
-            handleFillers(partySearchMsg, fillQueue, joinSet).then(() => handleFullParty());
-            // console.log(`${temp}`);
-            console.log(`test 2 ${Array.from(joinSet)}, ${fillQueue.getAll()}`);
-            // await handleFullParty();
-            console.log(`test 3 ${Array.from(joinSet)}, ${fillQueue.getAll()}`);
+            await handleFillers(partySearchMsg, fillQueue, joinSet);
+            await handleFullParty();
           }
         };
 
