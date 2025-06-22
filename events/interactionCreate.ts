@@ -111,11 +111,13 @@ export const interactionCreateEvent = {
         if (joinSet.size > 0) {
           if (joinSet.size >= partySize) {
             handlePartyEnd();
-            await partySearchMsg.reply({
-              content: `✅ The party is full!\nParty: ${convertIDsToMentions(joinSet)}`,
-              components: [],
-              allowedMentions: { users: Array.from(joinSet) },
-            });
+            try {
+              await partySearchMsg.reply({
+                content: `✅ The party is full!\nParty: ${convertIDsToMentions(joinSet)}`,
+                components: [],
+                allowedMentions: { users: Array.from(joinSet) },
+              });
+            } catch {}
             return;
           }
           partySearchMsg.edit(updatedPartyMsg());
@@ -190,11 +192,13 @@ export const interactionCreateEvent = {
             handlePartyEnd();
 
             const proxyMentions = proxyMap.size > 0 ? `, ${convertIDsToMentions(new Set(proxyMap.keys()), ', ')}` : ``;
-            await partySearchMsg.reply({
-              content: `✅ The party is full!\n${convertIDsToMentions(joinSet, ', ') + proxyMentions}`,
-              components: [],
-              allowedMentions: { users: Array.from(joinSet).concat(Array.from(proxyMap.keys())) },
-            });
+            try {
+              await partySearchMsg.reply({
+                content: `✅ The party is full!\n${convertIDsToMentions(joinSet, ', ') + proxyMentions}`,
+                components: [],
+                allowedMentions: { users: Array.from(joinSet).concat(Array.from(proxyMap.keys())) },
+              });
+            } catch {}
           } else {
             handlePartyEnd();
             try {

@@ -187,12 +187,10 @@ export async function handleFillers(msg: Message, fillQueue: FillQueue, joinSet:
 
       if (interaction.customId === 'filler_accept') {
         joinSet.add(fillerId);
-        console.log(`inner test ${Array.from(joinSet)}`);
         await fillMsg.edit({
           content: `✅ ${fillerMention} joined the party.`,
           components: [],
         });
-        console.log('resolve 1');
         resolve();
       } else {
         await fillMsg.edit({
@@ -200,7 +198,6 @@ export async function handleFillers(msg: Message, fillQueue: FillQueue, joinSet:
           components: [],
         });
         await handleFillers(msg, fillQueue, joinSet);
-        console.log('resolve 2');
         resolve();
       }
     });
