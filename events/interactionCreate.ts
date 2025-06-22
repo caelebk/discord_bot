@@ -13,7 +13,13 @@ import myClient from '..';
 import { Command } from '../commands/command';
 import { clearPartyContext, getPartyContext } from '../commands/party/partyContext';
 import { createPartySearchMsgUI } from '../commands/party/partyUI';
-import { convertIDsToMentions, convertProxiesToMentions, handleProxyUpdate } from '../commands/party/party';
+import {
+  convertIDsToMentions,
+  convertProxiesToMentions,
+  handleFillers,
+  handleProxyUpdate,
+} from '../commands/party/party';
+import { FillQueue } from '../utility/string/collectionUtility';
 
 export const interactionCreateEvent = {
   name: Events.InteractionCreate,
@@ -50,7 +56,7 @@ export const interactionCreateEvent = {
         }
 
         const { selectedRoles, joinSet, proxyMap } = context;
-        const fillSet = new Set<string>();
+        const fillQueue: FillQueue = new FillQueue();
 
         const partySize = parseInt(interaction.fields.getTextInputValue('partySize') || '0', 10);
         const startDelay = parseInt(interaction.fields.getTextInputValue('startTime') || '0', 10);
@@ -69,8 +75,8 @@ export const interactionCreateEvent = {
         const joinedSize = () => joinSet.size + proxyMap.size;
 
         const updatedPartyMsg = () => {
-          const joined = convertIDsToMentions(joinSet);
-          const fillers = convertIDsToMentions(fillSet);
+          const joined = convertIDsToMentions(joinSet, '\n', '> ');
+          const fillers = convertIDsToMentions(new Set(fillQueue.getAll()), '\n', '> ');
           const proxies = convertProxiesToMentions(proxyMap) || ``;
 
           const allJoinedIds = joinedSize() > 0 ? `\n${joined}\n${proxies}`.trimEnd() : `None`;
@@ -80,8 +86,7 @@ export const interactionCreateEvent = {
             `${content}\n` +
             `> ✅ **Joined (${joinedSize()}/${partySize})**: ` +
             `${allJoinedIds}` +
-            `\n> 🧩 **Fillers**: ${fillerString}` +
-            `\n> React with ✅ to join/leave or 🧩 to fill/unfill.`;
+            `\n> 🧩 **Fillers**: ${fillerString}`;
           return newContent;
         };
 
@@ -134,27 +139,40 @@ export const interactionCreateEvent = {
           time: durationInMs,
         });
 
-        const handleFullParty = () => {
+        const handleFullParty = async () => {
+          console.log('check');
           if (joinSet.size + proxyMap.size >= partySize) {
+            console.log('stop');
             buttonCollector.stop();
             userCollector.stop();
             reactionCollector.stop('full');
+          } else if (joinSet.size + fillQueue.size() >= partySize) {
+            console.log(`test 1 ${Array.from(joinSet)}, ${fillQueue.getAll()}`);
+            // const temp = await handleFillers(partySearchMsg, fillQueue, joinSet);
+
+            handleFillers(partySearchMsg, fillQueue, joinSet).then(() => handleFullParty());
+            // console.log(`${temp}`);
+            console.log(`test 2 ${Array.from(joinSet)}, ${fillQueue.getAll()}`);
+            // await handleFullParty();
+            console.log(`test 3 ${Array.from(joinSet)}, ${fillQueue.getAll()}`);
           }
         };
 
-        reactionCollector.on('collect', (reaction: MessageReaction, user: User) => {
+        reactionCollector.on('collect', async (reaction: MessageReaction, user: User) => {
           if (user.bot) return;
 
           const emoji = reaction.emoji.name;
           if (emoji === '✅') {
             joinSet.add(user.id);
-            fillSet.delete(user.id);
-          } else if (emoji === '🧩' && !joinSet.has(user.id)) {
-            fillSet.add(user.id);
+            if (fillQueue.has(user.id)) {
+              fillQueue.remove(user.id);
+            }
+          } else if (emoji === '🧩' && !joinSet.has(user.id) && !fillQueue.has(user.id)) {
+            fillQueue.enqueue(user.id);
           }
 
           partySearchMsg.edit(updatedPartyMsg());
-          handleFullParty();
+          await handleFullParty();
         });
 
         reactionCollector.on('remove', (reaction, user) => {
@@ -169,7 +187,7 @@ export const interactionCreateEvent = {
               }
             }
           } else if (emoji === '🧩') {
-            fillSet.delete(user.id);
+            fillQueue.remove(user.id);
           }
 
           partySearchMsg.edit(updatedPartyMsg());
@@ -183,7 +201,7 @@ export const interactionCreateEvent = {
             await partySearchMsg.reply({
               content: `✅ The party is full!\n${convertIDsToMentions(joinSet, ', ') + proxyMentions}`,
               components: [],
-              allowedMentions: { users: Array.from(joinSet) },
+              allowedMentions: { users: Array.from(joinSet).concat(Array.from(proxyMap.keys())) },
             });
           } else {
             handlePartyEnd();
@@ -199,7 +217,7 @@ export const interactionCreateEvent = {
             handleProxyUpdate(interaction.user.id, userIds, proxyMap, joinSet);
             partySearchMsg.edit(updatedPartyMsg());
           }
-          handleFullParty();
+          await handleFullParty();
           await interaction.deferUpdate();
         });
 

@@ -7,18 +7,18 @@ import {
   InteractionResponse,
   InteractionReplyOptions,
   UserSelectMenuInteraction,
-  User,
-  Collection,
+  Message,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } from 'discord.js';
 import { Command } from '../command';
 import { createPartyModal, createPartyOptionsUI } from './partyUI';
 import { getPartyContext, setPartyContext } from './partyContext';
+import { FillQueue } from '../../utility/string/collectionUtility';
 
 //TODO:
-// 1. proxies
-// 2. user select state management
 // 3. timer
-// 4. fillers queue
 
 export const partyCommand: Command = {
   data: new SlashCommandBuilder().setName('party').setDescription('Starts a party'),
@@ -126,8 +126,8 @@ export const partyCommand: Command = {
   },
 };
 
-export function convertIDsToMentions(users: Set<string>, separator: string = `\n`): string {
-  return [...users].map((id) => `<@${id}>`).join(separator);
+export function convertIDsToMentions(users: Set<string>, separator: string = `\n`, prefix: string = ''): string {
+  return [...users].map((id) => `${prefix}<@${id}>`).join(separator);
 }
 
 export function convertProxiesToMentions(proxyMap: Map<string, string>): string {
@@ -156,5 +156,63 @@ export function handleProxyUpdate(
     if (!proxyMap.has(userId) && !joinSet.has(userId)) {
       proxyMap.set(userId, authorId);
     }
+  });
+}
+
+export async function handleFillers(msg: Message, fillQueue: FillQueue, joinSet: Set<string>) {
+  const fillerId = fillQueue.promote();
+  if (!fillerId) return;
+
+  return new Promise<void>(async (resolve) => {
+    const fillerMention = `<@${fillerId}>`;
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('filler_accept').setLabel('Fill').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('filler_decline').setLabel('Skip').setStyle(ButtonStyle.Danger)
+    );
+    const fillMsg = await msg.channel.send({
+      content: `🎯 A party slot is open. ${fillerMention}, Fill?`,
+      allowedMentions: { users: [fillerId] },
+      components: [row],
+    });
+
+    const buttonCollector = fillMsg.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      time: 30_000,
+      max: 1,
+      filter: (i) => i.user.id === fillerId,
+    });
+
+    buttonCollector.on('collect', async (interaction) => {
+      await interaction.deferUpdate();
+
+      if (interaction.customId === 'filler_accept') {
+        joinSet.add(fillerId);
+        console.log(`inner test ${Array.from(joinSet)}`);
+        await fillMsg.edit({
+          content: `✅ ${fillerMention} joined the party.`,
+          components: [],
+        });
+        console.log('resolve 1');
+        resolve();
+      } else {
+        await fillMsg.edit({
+          content: `❌ ${fillerMention} skipped.`,
+          components: [],
+        });
+        await handleFillers(msg, fillQueue, joinSet);
+        console.log('resolve 2');
+        resolve();
+      }
+    });
+
+    buttonCollector.on('end', async (collected) => {
+      if (collected.size === 0) {
+        await fillMsg.edit({
+          content: `⌛ ${fillerMention} did not respond in time.`,
+          components: [],
+        });
+        await handleFillers(msg, fillQueue, joinSet);
+      }
+    });
   });
 }

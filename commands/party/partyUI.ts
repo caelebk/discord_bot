@@ -98,12 +98,13 @@ export function createPartySearchMsgUI(
   const description =
     `Looking for ${roleMentions}\n` +
     `> 👥 **${partySize} players**\n` +
-    `> ⏳ **Start Time: **${
+    `> ⏳ **Start: **${
       startDelay ? `${new Date(partyTime).toLocaleTimeString().slice(0, -6)}` : 'now'
     } (${discordStartTime})\n` +
-    `> ⏳ **End Time: **${
+    `> ⏳ **Expire: **${
       duration ? `${new Date(endTime).toLocaleTimeString().slice(0, -6)}` : 'now'
-    } (${discordEndTime})`;
+    } (${discordEndTime})` +
+    `\n\nReact with ✅ to join/leave or 🧩 to fill/unfill.`;
   const cancelButton = new ButtonBuilder().setCustomId('cancelParty').setLabel('Cancel').setStyle(ButtonStyle.Danger);
   const userSelect = new UserSelectMenuBuilder()
     .setCustomId('additionalUsers')
